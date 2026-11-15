@@ -1,0 +1,30 @@
+* commit db33fb366743cdccb8cbb125599f6b25e229dbd2
+| Author: Jesus Palencia <sinfallas@gmail.com>
+| Date:   Sat Nov 14 22:32:38 2026 -0400
+| 
+|     Implementación inicial de imagen base endurecida sin root sinfallas/base-mobile-appium:26 (Android SDK, Appium 3, WebdriverIO v9)
+| 
+|  .dockerignore                 |     4 +
+|  .gitignore                    |     6 +
+|  AUTHORS.md                    |     3 +
+|  Dockerfile26                  |   132 +
+|  README.es.md                  |    28 +
+|  README.md                     |    29 +-
+|  appium-wrapper.sh             |    25 +
+|  build                         |   216 +
+|  example/package.json          |    10 +
+|  example/smoke.ts              |    26 +
+|  npm-shield.sh                 |    78 +
+|  qa11x-tools/package-lock.json | 10061 ++++++++++++++++++++++++++++++++++++++
+|  qa11x-tools/package.json      |    33 +
+|  13 files changed, 10650 insertions(+), 1 deletion(-)
+| 
+* commit 7642cb7f6102fbed25c7f62044770e8ccfa72302
+  Author: Jesus Palencia <sinfallas@yahoo.com>
+  Date:   Sat Nov 14 21:51:02 2026 -0400
+  
+      Initial commit
+  
+   LICENSE   | 339 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   README.md |   1 +
+   2 files changed, 340 insertions(+)
