@@ -1,0 +1,10 @@
+{
+  "name": "base-mobile-appium-smoke",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --strict --noImplicitAny --noUnusedLocals --noUnusedParameters --noImplicitReturns --erasableSyntaxOnly --allowImportingTsExtensions --target ES2023 --module NodeNext --moduleResolution NodeNext --typeRoots /opt/qa11x/node_modules/@types --types node --noEmit smoke.ts",
+    "smoke": "node --experimental-strip-types smoke.ts"
+  }
+}

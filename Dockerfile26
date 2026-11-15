@@ -1,0 +1,132 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 Jesus Palencia <sinfallas@gmail.com> (Creado en Tecno Consultores)
+
+ARG NODE_VERSION=26
+ARG BASE_RUNTIME_DISTRO=slim
+
+FROM node:${NODE_VERSION}-${BASE_RUNTIME_DISTRO} AS sdk-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG ANDROID_CMDLINE_URL="https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip"
+ARG ANDROID_CMDLINE_SHA256="0877a1d048fe4a24efe2eff536ca4223f7adeb58648bb81909d33c446918cfa8"
+
+ENV ANDROID_HOME="/opt/android-sdk" \
+    ANDROID_SDK_ROOT="/opt/android-sdk" \
+    APPIUM_HOME="/opt/appium-home" \
+    QA11X_GLOBAL_DIR="/opt/qa11x" \
+    APPIUM_SKIP_CHROMEDRIVER_INSTALL="1" \
+    DO_NOT_TRACK="1" \
+    SCARF_ANALYTICS="false"
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends --no-install-suggests \
+        ca-certificates curl git unzip openjdk-21-jdk-headless \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
+
+RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" /tmp/sdk-dl \
+    && curl -fsSL "${ANDROID_CMDLINE_URL}" -o /tmp/sdk-dl/cmdline-tools.zip \
+    && printf '%s  %s\n' "${ANDROID_CMDLINE_SHA256}" "/tmp/sdk-dl/cmdline-tools.zip" | sha256sum -c - \
+    && unzip -q /tmp/sdk-dl/cmdline-tools.zip -d /tmp/sdk-dl \
+    && mv /tmp/sdk-dl/cmdline-tools "${ANDROID_HOME}/cmdline-tools/latest" \
+    && rm -rf /tmp/sdk-dl \
+    && (yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --sdk_root="${ANDROID_HOME}" --licenses >/dev/null || true) \
+    && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --sdk_root="${ANDROID_HOME}" \
+        "platform-tools" \
+        "build-tools;35.0.0" \
+        "platforms;android-35" \
+    && rm -rf "${ANDROID_HOME}/cmdline-tools" "${ANDROID_HOME}/.temp" "${ANDROID_HOME}/licenses"
+
+COPY qa11x-tools/package.json qa11x-tools/package-lock.json "${QA11X_GLOBAL_DIR}/"
+
+RUN mkdir -p "${APPIUM_HOME}" \
+    && npm --prefix "${QA11X_GLOBAL_DIR}" ci --omit=dev --ignore-scripts --no-fund --no-audit \
+    && "${QA11X_GLOBAL_DIR}/node_modules/.bin/appium" driver install uiautomator2 \
+    && "${QA11X_GLOBAL_DIR}/node_modules/.bin/appium" driver install xcuitest \
+    && "${QA11X_GLOBAL_DIR}/node_modules/.bin/appium" driver list --installed --json >/dev/null \
+    && "${QA11X_GLOBAL_DIR}/node_modules/.bin/cyclonedx-npm" --omit dev --output-file "${QA11X_GLOBAL_DIR}/sbom.cdx.json" "${QA11X_GLOBAL_DIR}/package.json" \
+    && find "${APPIUM_HOME}" -depth \( -name ".git" -o -name "test" -o -name "tests" -o -name "docs" \) -exec rm -rf {} + \
+    && rm -rf /root/.npm /root/.cache /tmp/*
+
+FROM node:${NODE_VERSION}-${BASE_RUNTIME_DISTRO}
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG PNPM_VERSION=latest
+ARG BUILD_DATE
+
+ENV HOME="/tmp" \
+    PNPM_HOME="/pnpm" \
+    QA11X_GLOBAL_DIR="/opt/qa11x" \
+    JAVA_HOME="/opt/java/openjdk" \
+    ANDROID_HOME="/opt/android-sdk" \
+    ANDROID_SDK_ROOT="/opt/android-sdk" \
+    ANDROID_USER_HOME="/tmp/.android" \
+    APPIUM_HOME="/opt/appium-home" \
+    QA_MOBILE_ARTIFACT_DIR="/tmp/qa-11x-mobile-artifacts" \
+    NODE_PATH="/opt/qa11x/node_modules:/usr/local/lib/node_modules" \
+    APPIUM_SKIP_CHROMEDRIVER_INSTALL="1" \
+    DO_NOT_TRACK="1" \
+    SCARF_ANALYTICS="false" \
+    PATH="/usr/local/bin:/pnpm/bin:/pnpm:/opt/qa11x/node_modules/.bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.0:/opt/java/openjdk/bin:$PATH"
+
+WORKDIR /app
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends --no-install-suggests \
+        ca-certificates tzdata curl wget git nano bash openjdk-21-jre-headless \
+    && apt-get clean \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y autoremove --purge \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* \
+    && mkdir -p /opt/java \
+    && ln -s /usr/lib/jvm/java-21-openjdk-* /opt/java/openjdk
+
+COPY --from=sdk-builder /opt/android-sdk /opt/android-sdk
+COPY --from=sdk-builder /opt/appium-home /opt/appium-home
+COPY --from=sdk-builder /opt/qa11x /opt/qa11x
+
+RUN groupadd -g 10001 appgroup \
+    && useradd -u 10001 -g appgroup -m -d /home/appuser -s /usr/sbin/nologin appuser \
+    && mkdir -p "$PNPM_HOME" /home/appuser/.config/pnpm /etc/profile.d \
+    && printf "minimum-release-age=1440\n" > /home/appuser/.config/pnpm/rc \
+    && npm install -g --no-fund --no-audit "pnpm@${PNPM_VERSION}" npm@latest \
+    && for bin in wdio tsc tsserver; do \
+         if [[ -e "${QA11X_GLOBAL_DIR}/node_modules/.bin/${bin}" ]]; then \
+           ln -sf "${QA11X_GLOBAL_DIR}/node_modules/.bin/${bin}" "/usr/local/bin/${bin}"; \
+         fi; \
+       done \
+    && ln -sf "${ANDROID_HOME}/platform-tools/adb" /usr/local/bin/adb \
+    && for btool in aapt2 apksigner zipalign; do \
+         if [[ -e "${ANDROID_HOME}/build-tools/35.0.0/${btool}" ]]; then \
+           ln -sf "${ANDROID_HOME}/build-tools/35.0.0/${btool}" "/usr/local/bin/${btool}"; \
+         fi; \
+       done \
+    && printf 'export JAVA_HOME="/opt/java/openjdk"\nexport ANDROID_HOME="/opt/android-sdk"\nexport ANDROID_SDK_ROOT="/opt/android-sdk"\nexport ANDROID_USER_HOME="/tmp/.android"\nexport APPIUM_HOME="/opt/appium-home"\nexport NODE_PATH="/opt/qa11x/node_modules:/usr/local/lib/node_modules"\nexport PATH="/usr/local/bin:/pnpm/bin:/pnpm:/opt/qa11x/node_modules/.bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/35.0.0:/opt/java/openjdk/bin:$PATH"\n' > /etc/profile.d/qa11x.sh \
+    && chmod 0644 /etc/profile.d/qa11x.sh \
+    && mkdir -p "${APPIUM_HOME}/node_modules/.cache/appium" \
+    && chmod -R a+rX "$QA11X_GLOBAL_DIR" "$APPIUM_HOME" "$ANDROID_HOME" /usr/local/bin /usr/local/lib/node_modules "$PNPM_HOME" \
+    && chmod 1777 "$APPIUM_HOME" \
+    && chmod -R a+rwX "${APPIUM_HOME}/node_modules/.cache" \
+    && if [[ -f "${APPIUM_HOME}/package.json" ]]; then chmod 0666 "${APPIUM_HOME}/package.json"; fi \
+    && rm -rf /root/.cache /root/.npm /root/.local/share/pnpm /tmp/* \
+    && mv /usr/local/bin/npm /usr/local/bin/.npm-real \
+    && chown -R 10001:10001 /app "$PNPM_HOME" /home/appuser
+
+COPY --chmod=0755 npm-shield.sh /usr/local/bin/npm
+COPY --chmod=0755 appium-wrapper.sh /usr/local/bin/appium
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD appium --version >/dev/null && adb version >/dev/null || exit 1
+
+LABEL org.opencontainers.image.authors="Jesus Palencia <sinfallas@gmail.com> (Creado en Tecno Consultores)" \
+      org.opencontainers.image.title="sinfallas/base-mobile-appium" \
+      org.opencontainers.image.description="Hardened non-root Mobile QA 11X v3.0 W3C runner with OpenJDK 21, Android SDK tools, Appium 3 (uiautomator2/xcuitest) and WebdriverIO v9" \
+      org.opencontainers.image.source="https://hub.docker.com/r/sinfallas/base-mobile-appium" \
+      org.opencontainers.image.licenses="GPL-2.0-only" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+
+USER 10001:10001
+CMD ["/bin/bash"]
