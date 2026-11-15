@@ -1,3 +1,21 @@
+* commit a93258ffe16f4e001552827cbaa916e84c55a6b6
+| Author: Jesus Palencia <sinfallas@gmail.com>
+| Date:   Sat Nov 14 23:41:32 2026 -0400
+| 
+|     Soporte multi-arquitectura (linux/amd64 y linux/arm64) en Dockerfile26 usando cmdline-tools 21.0 y binarios Android nativos Debian trixie
+| 
+|  Dockerfile26 | 74 ++++++++++++++++++++++++++++++++++++++++++++++------------
+|  1 file changed, 59 insertions(+), 15 deletions(-)
+| 
+* commit bfe62a87e97ea456d67d0f8b1525b8dd503e89b4
+| Author: Jesus Palencia <sinfallas@gmail.com>
+| Date:   Sat Nov 14 22:32:38 2026 -0400
+| 
+|     Registro inicial de changelog
+| 
+|  changelog | 30 ++++++++++++++++++++++++++++++
+|  1 file changed, 30 insertions(+)
+| 
 * commit db33fb366743cdccb8cbb125599f6b25e229dbd2
 | Author: Jesus Palencia <sinfallas@gmail.com>
 | Date:   Sat Nov 14 22:32:38 2026 -0400
