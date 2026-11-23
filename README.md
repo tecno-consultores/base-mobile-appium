@@ -1,5 +1,7 @@
 > 🌐 **Language:** **English** (Canonical) | [🇪🇸 Español](README.es.md)
 
+[![Descargas de Docker](https://img.shields.io/docker/pulls/sinfallas/base-mobile-appium?style=flat&logo=docker&color=blue)](https://hub.docker.com/r/sinfallas/base-mobile-appium)
+ 
 # base-mobile-appium
 
 Warning: `npm` mutating commands (`install`, `ci`, `update`) are blocked by `npm-shield.sh`. Use `pnpm` or pre-baked tools in `/opt/qa11x`.
